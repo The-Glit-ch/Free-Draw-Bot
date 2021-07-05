@@ -1,14 +1,15 @@
 while True:
     try:
-        import os, sys, json, time #Base modules
-        import ait, cv2, numpy #Dependencies
+        import os, sys, json, time, turtle #Base modules
+        import ait, cv2, numpy, pyautogui #Dependencies
         import pynput.mouse as ms
 
         from pynput.mouse import Button
         from pynput import keyboard
+        from turtle import mode, Terminator
         break
     except ImportError:
-        dep = ["pynput","autoit","numpy","opencv-python"] #For every dep added put it in this list
+        dep = ["pynput","autoit","numpy","opencv-python","pyautogui","pillow"] #For every dep added put it in this list
         print("Import error\nDownloading dependencies")
         time.sleep(3)
         for i in dep:
@@ -29,7 +30,7 @@ __bartype__     = 1
 
 #Info
 __author__  = "https://github.com/The-Glit-ch"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 #Vars
 progress_list = [5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95]
@@ -70,6 +71,7 @@ def progress_handler(progress,prev_progress,bar_type):
 
     return round(progress) #Returns new prev_progress
 
+#Misc?
 def getXandY(data,select):
     temp = str(data).split(",")
     if "n" in str(data):
@@ -132,6 +134,7 @@ def save_settings():
 
 def load_settings():
     print("Loading settings...")
+    sys.stdout.flush()
     if os.path.exists("settings.json"):
         settings_file = open("settings.json","r") #Open file as read
         settingsJSON = json.load(settings_file) #Load the json
@@ -276,12 +279,94 @@ def CustomDataFileFromImageOption(fn):
     File.close()
     print("Data file created!")
 
+def ShowOverlay(fn):
+    #So you might say "why didnt you use tkinter for the overlay?"
+    #Simple. It sucks and "canvas.create_line()" is shit
+    
+    pyautogui.screenshot("./bg.png") #We take a screenshot and use it for the "overlay"
+
+    #Screen setup
+    window = turtle.Screen()
+    window.setup(width=1.0, height=1.0, startx=None, starty=None)
+
+    centerY = window.window_height() / 2 #Center the image(we only need Y)
+    centerX = window.window_width() / 2
+
+    #Turtle refs
+    try:
+        t = turtle.Turtle()
+    except Terminator: 
+        #https://stackoverflow.com/questions/50438762/python-turtle-window-crashes-every-2nd-time-running
+        #....WHY????????????????
+        t = turtle.Turtle()
+    
+    s = turtle.Screen()
+
+    mode("world") #I forgot what this does but if its not here it ruins everything
+
+    t.hideturtle() #Hide the turtle
+    t.color("red")
+
+    s.bgpic("bg.png") #Set the image as the background making a "overlay"
+    s.title("Image Preview")
+    s.tracer(0,0) #Disable draw animation
+    s.update()
+
+    def invert(x,side):
+        if side == 0:
+            #When Negative-Positive: Image is at normal state(left) and matches original image
+            #When Positive-Negative: Image is flipped on the X and appears on the right
+            if x <= centerX:
+                return -abs(centerX-x)
+            else:
+                return abs(x-centerX)
+        elif side == 1:
+            #When Positive-Negative: Image matches original image in terms of Y axis. Position of the image depends on the X
+            #When Negative-Positive: Image is flipped on the Y. Position of the image depends on the X 
+            if x <= centerY:
+                return abs(centerY-x)
+            else:
+                return -abs(x-centerY)
+    # def OLD_invert(x):
+    #     if x < 0:
+    #         return abs(x)#make positive
+    #     else:
+    #         return -abs(x)#make negative
+    
+    #We need to invert the numbers because of how turtle maps the screen(see comment drawing below)
+    #stupid but whatever
+
+    #################\\#################
+    #####(-x,+y)#####\\#####(+x,+y)#####
+    #################\\#################
+    #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+    #################\\#################
+    #####(-x,-y)#####\\#####(+x,-y)#####
+    #################\\#################
+
+    with open(fn+".json","r") as dataFile:
+        JSONData = json.load(dataFile)
+        pointArr = JSONData["pointarr"]
+
+        #Similar to "Draw from x" we must hold(pendown) and release(penup) the Lmb(turtle)
+        t.penup()
+        t.goto(invert(getXandY(pointArr[0],0) + __xoffset__,0),invert(getXandY(pointArr[0],1) + __yoffset__,1)) #First entry is the start position
+        for i in range(1,len(pointArr)): #Skip first enrty
+            if "n" in pointArr[i]:
+                t.goto(invert(getXandY(pointArr[i],0) + __xoffset__,0),invert(getXandY(pointArr[i],1) + __yoffset__,1))
+
+            t.pendown()
+            t.goto(invert(getXandY(pointArr[i],0) + __xoffset__,0),invert(getXandY(pointArr[i],1) + __yoffset__,1))
+            t.penup()
+    
+    s.mainloop()
+
 #Main loop
 print(f"Free Draw Bot v{__version__}\nMade by The-Glit-ch({__author__})")
 load_settings()
 while True:
     print("--------------------")
-    print("Please choose an option:\n(1) Draw from data file\n(2) Draw from image\n(3) Make your own data file\n(4) Change settings")
+    print("Please choose an option:\n(1) Draw from data file\n(2) Draw from image\n(3) Make your own data file\n(4) See preview\n(5) Change settings")
     while True:
         option_raw = input(":")
         try:
@@ -340,7 +425,18 @@ while True:
             pass
         else:
             print("Please enter in a valid option")
-    elif option == 4: #Settings
+    elif option == 4: #Preview
+        print("Enter in the data file name")
+        while True:
+            fn = str(input(":")).replace(".json","") #If the user is stupid and puts "filename.json"
+            if os.path.exists(fn+".json"):
+                print("Now previewing")
+                ShowOverlay(fn)
+                os.remove("bg.png") #Should remove image when window is closed
+                break
+            else:
+                print("Please enter in a valid data file name")
+    elif option == 5: #Settings
         print("Please choose an option:\n(1) Change start delay\n(2) Change drawing speed\n(3) Change drawing offset\n(4) Change the progress bar style\n(5) View current settings\n(6) Back")
         option_raw = input(":")
         try:
